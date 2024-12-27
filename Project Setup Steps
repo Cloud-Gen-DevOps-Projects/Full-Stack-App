@@ -1,0 +1,535 @@
+
+
+
+
+
+
+
+=============================================================
+
+
+sudo apt update
+sudo apt install openjdk-17-jre-headless  -y
+
+
+
+=============================================================
+
+
+
+
+
+
+
+
+=============================================================
+
+
+
+
+
+
+=============================================================
+Jekins Server 
+vi install_jenkins.sh
+
+#!/bin/bash
+
+# Update system packages
+sudo apt-get update -y
+
+# Install Java (Jenkins requires Java to run)
+sudo apt-get install -y openjdk-11-jdk
+
+# Import Jenkins GPG key and add Jenkins apt repository
+curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io.key | sudo tee \
+  /usr/share/keyrings/jenkins-keyring.asc > /dev/null
+
+echo deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] \
+  https://pkg.jenkins.io/debian-stable binary/ | sudo tee \
+  /etc/apt/sources.list.d/jenkins.list > /dev/null
+
+# Update package lists to include Jenkins repository
+sudo apt-get update -y
+
+# Install Jenkins
+sudo apt-get install -y jenkins
+
+# Start Jenkins
+sudo systemctl start jenkins
+
+# Enable Jenkins to start at boot
+sudo systemctl enable jenkins
+
+# Print the initial Jenkins admin password
+echo "Jenkins installed successfully!"
+echo "You can access Jenkins at http://<your-server-ip>:8080"
+echo "Use the following command to retrieve your initial Jenkins admin password:"
+echo "sudo cat /var/lib/jenkins/secrets/initialAdminPassword"
+
+
+
+
+
+chmod +x install_jenkins.sh
+./install_jenkins.sh
+
+
+
+
+
+=============================================================
+SoarQube Server 
+
+
+#!/bin/bash
+
+# Update existing list of packages
+sudo apt-get update
+
+# Install prerequisite packages
+sudo apt-get install -y \
+    ca-certificates \
+    curl \
+    gnupg \
+    lsb-release
+
+# Add Docker's official GPG key'
+sudo mkdir -m 0755 -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+
+# Set up the Docker stable repository
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Update the package index again
+sudo apt-get update
+
+# Install Docker Engine, CLI, and containerd
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# Start Docker
+sudo systemctl start docker
+
+# Enable Docker to start on boot
+sudo systemctl enable docker
+
+# Verify Docker installation
+sudo docker --version
+
+# Add current user to the Docker group to avoid using sudo (optional)
+sudo usermod -aG docker $USER
+
+echo "Docker installation completed. Please log out and log back in to apply the group changes."
+-------------------------------------------------------------------------------------------------
+
+
+
+
+
+=============================================================
+Nexus Server 
+
+#!/bin/bash
+
+# Update existing list of packages
+sudo apt-get update
+
+# Install prerequisite packages
+sudo apt-get install -y \
+    ca-certificates \
+    curl \
+    gnupg \
+    lsb-release
+
+# Add Docker's official GPG key'
+sudo mkdir -m 0755 -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+
+# Set up the Docker stable repository
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Update the package index again
+sudo apt-get update
+
+# Install Docker Engine, CLI, and containerd
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# Start Docker
+sudo systemctl start docker
+
+# Enable Docker to start on boot
+sudo systemctl enable docker
+
+# Verify Docker installation
+sudo docker --version
+
+# Add current user to the Docker group to avoid using sudo (optional)
+sudo usermod -aG docker $USER
+
+echo "Docker installation completed. Please log out and log back in to apply the group changes."
+-------------------------------------------------------------------------------------------------
+
+sudo docker run -d -p 8081:8081 sonatype/nexus3
+
+sudo docker exec -it <sonar-docker-container-name> /bin/bash
+cat /nexus-data/admin.password
+
+
+
+
+
+
+=============================================================
+wget https://github.com/aquasecurity/trivy/releases/download/v0.43.0/trivy_0.43.0_Linux-64bit.deb
+sudo dpkg -i trivy_0.43.0_Linux-64bit.deb
+
+
+
+==============================================================
+# Update the package list
+sudo apt update
+
+# Install curl if not already installed
+sudo apt install curl -y
+
+# Download the AWS CLI v2 installation file
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+
+# Install unzip and extract the downloaded zip file
+sudo apt install unzip -y
+unzip awscliv2.zip
+
+# Run the AWS CLI installer
+sudo ./aws/install
+
+# Verify the installation
+aws --version
+
+=============================================================
+
+docker login
+chmod 777 /var/run/docker.sock
+cd /opt/
+===================================================
+
+
+
+
+
+pipeline {
+    agent any
+    tools {
+        jdk "jdk"
+        maven "maven"
+    }
+    environment {
+        SCANNER_HOME = tool 'sonar-scanner'
+    }
+    
+    stages {
+        stage('Git Checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/Cloud-Gen-DevOps-Projects/Full-Stack-App.git'
+            }
+        }
+        stage('Compile') {
+            steps {
+                sh "mvn compile"
+            }
+        }
+        stage('Trivy FS') {
+            steps {
+                sh "trivy fs . --format table -o fs.html"
+            }
+        }
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('sonar-scanner') {
+                    sh '''$SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Blogging-app -Dsonar.projectKey=Blogging-app \
+                          -Dsonar.java.binaries=target'''
+                }
+            }
+        }
+        stage('Build') {
+            steps {
+                sh "mvn package"
+            }
+        }
+        stage('Publish Artifacts') {
+            steps {
+                        sh "mvn deploy"
+            }
+        }
+        stage('Docker Build & Tag') {
+            steps {
+                script{
+                
+                sh "docker build -t thanish/gab-blogging-app ."
+                }
+                }
+            }
+        
+        stage('Trivy Image Scan') {
+            steps {
+                sh "trivy image --format table -o image.html thanish/gab-blogging-app:latest"
+            }
+        }
+        stage('Docker Push Image') {
+            steps {
+                script{
+                withDockerRegistry(credentialsId: 'docker-thanish', url: 'https://index.docker.io/v1/') {
+                    sh "docker push thanish/gab-blogging-app"
+                }
+                }
+            }
+        }
+    }  // Closing stages
+}  // Closing pipeline
+
+==============================================================
+#!/bin/bash
+
+# Define the version and URL for the Terraform package
+TERRAFORM_VERSION="1.11.0-alpha20241218"
+TERRAFORM_ZIP="terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+TERRAFORM_URL="https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+INSTALL_DIR="/usr/local/bin"
+
+# Step 1: Update package lists and install required dependencies
+echo "Updating package lists and installing dependencies..."
+sudo apt update
+sudo apt install -y unzip curl
+
+# Step 2: Download the Terraform zip file
+echo "Downloading Terraform ${TERRAFORM_VERSION}..."
+curl -o /tmp/${TERRAFORM_ZIP} ${TERRAFORM_URL}
+
+# Step 3: Unzip the downloaded file
+echo "Unzipping Terraform package..."
+unzip /tmp/${TERRAFORM_ZIP} -d /tmp
+
+# Step 4: Move the Terraform binary to /usr/local/bin
+echo "Moving Terraform binary to ${INSTALL_DIR}..."
+sudo mv /tmp/terraform ${INSTALL_DIR}
+
+# Step 5: Clean up by removing the downloaded zip file
+echo "Cleaning up..."
+rm /tmp/${TERRAFORM_ZIP}
+
+# Step 6: Verify installation
+echo "Verifying Terraform installation..."
+terraform -v
+
+echo "Terraform ${TERRAFORM_VERSION} installation completed!"
+
+------------------------------------------------------------------
+terraform init
+terraform plan
+terraform validate
+terraform apply --auto-approve
+sudo snap install kubectl --classic
+aws eks --region ap-south-1 update-kubeconfig --name cloudgen-cluster
+kubectl create namespace webapps
+
+
+-------------------
+
+vi serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jenkins
+  namespace: webapps
+
+------------------------
+vi role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: webapps
+  name: role
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["get", "list", "create", "delete", "patch", "watch"]
+
+----------------------------------------------
+vi rolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rolebinding
+  namespace: webapps
+subjects:
+- kind: ServiceAccount
+  name: jenkins # The service account created earlier
+  namespace: webapps
+roleRef:
+  kind: Role
+  name: role  # The role created earlier
+  apiGroup: rbac.authorization.k8s.io
+
+----------------------------------------
+vi sa-secret.yaml
+apiVersion: v1
+kind: Secret
+type: kubernetes.io/service-account-token
+metadata:
+  name: mysecretname
+  namespace: webapps  # Make sure to specify the correct namespace
+  annotations:
+    kubernetes.io/service-account.name: jenkins  # The service account name
+
+---------------------------------------
+
+kubectl apply -f serviceaccount.yaml
+kubectl apply -f role.yaml
+kubectl apply -f rolebinding.yaml
+kubectl apply -f sa-secret.yaml
+
+=========================================
+kubectl create secret docker-registry regcred \
+  --docker-server=https://index.docker.io/v1/ \
+  --docker-username=thanish \
+  --docker-password=Thanish@0710 \
+  --namespace=webapps
+
+----------------------------------------------------
+
+kubectl get secret regcred --namespace=webapps
+
+
+token:      eyJhbGciOiJSUzI1NiIsImtpZCI6Ii11SDR0X3hyb1NjTDItTUVWZTFhc1dMRUFVVzFYNjBHR1R0ck9xd0xmcmcifQ.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJ3ZWJhcHBzIiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9zZWNyZXQubmFtZSI6Im15c2VjcmV0bmFtZSIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50Lm5hbWUiOiJqZW5raW5zIiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9zZXJ2aWNlLWFjY291bnQudWlkIjoiMTY5MTc5MWUtYjcwOS00MGZiLTgzMDItMWQwZjdiMmMwODA5Iiwic3ViIjoic3lzdGVtOnNlcnZpY2VhY2NvdW50OndlYmFwcHM6amVua2lucyJ9.XLPBamNCNBqyxWcbaae4y5uDoTRIVuf--Sr10JRPnJzSwAQy6f_yzNxX2C6tN63GXPHvXJwRQFc3OJZmpR-S2BGpGIOGhJIMUrRxc_cUdJZOtuUL2E-Yklmu_zVW8mEuvjTr7bClTwr6nW95oNoumnbo9T7lT0IC5JbEPtADSdFz_VL76ORgyExI8yeyxWc4lDYhYO3Elf08yIRZSwwK3CEvTTfSjLueupSbkl6e4NsYWiZnvjUnudXRRKt0b3wkmDkSjzyF25-D3lpNFt79vdHid5xb1mQfcI1AMoJwMpF_FpEHaZ7o3QhQYnkzfAs-_uxsUoel48a9VzxhFU3zHQ
+
+
+
+
+===========================================================================================
+pipeline {
+    agent any
+    tools {
+        jdk "jdk"
+        maven "maven"
+    }
+    environment {
+        SCANNER_HOME = tool 'sonar-scanner'
+    }
+    
+    stages {
+        stage('Git Checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/Cloud-Gen-DevOps-Projects/Full-Stack-App.git'
+            }
+        }
+        stage('Compile') {
+            steps {
+                sh "mvn compile"
+            }
+        }
+        stage('Trivy FS') {
+            steps {
+                sh "trivy fs . --format table -o fs.html"
+            }
+        }
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('sonar-scanner') {
+                    sh '''$SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Blogging-app -Dsonar.projectKey=Blogging-app \
+                          -Dsonar.java.binaries=target'''
+                }
+            }
+        }
+        stage('Build') {
+            steps {
+                sh "mvn package"
+            }
+        }
+        stage('Publish Artifacts') {
+            steps {
+                withMaven(globalMavenSettingsConfig: '', jdk: 'jdk', maven: 'maven', mavenSettingsConfig: '', traceability: true) {
+                   sh "mvn deploy"
+                }
+            }
+        }
+        stage('Docker Build & Tag') {
+            steps {
+                script{
+                sh "docker build -t thanish/gab-blogging-app ."
+                }
+            }
+        }
+        stage('Trivy Image Scan') {
+            steps {
+                sh "trivy image --format table -o image.html thanish/gab-blogging-app:latest"
+            }
+        }
+        stage('Docker Push Image') {
+            steps {
+                script{
+               withDockerRegistry(credentialsId: 'docker-thanish', url: 'https://index.docker.io/v1/') {
+                    sh "docker push thanish/gab-blogging-app"
+                }
+                }
+            }
+        }
+        stage('K8s Deploy') {
+            steps {
+              withKubeCredentials(kubectlCredentials: [[caCertificate: 'token:      eyJhbGciOiJSUzI1NiIsImtpZCI6Ii11SDR0X3hyb1NjTDItTUVWZTFhc1dMRUFVVzFYNjBHR1R0ck9xd0xmcmcifQ.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJ3ZWJhcHBzIiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9zZWNyZXQubmFtZSI6Im15c2VjcmV0bmFtZSIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50Lm5hbWUiOiJqZW5raW5zIiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9zZXJ2aWNlLWFjY291bnQudWlkIjoiMTY5MTc5MWUtYjcwOS00MGZiLTgzMDItMWQwZjdiMmMwODA5Iiwic3ViIjoic3lzdGVtOnNlcnZpY2VhY2NvdW50OndlYmFwcHM6amVua2lucyJ9.XLPBamNCNBqyxWcbaae4y5uDoTRIVuf--Sr10JRPnJzSwAQy6f_yzNxX2C6tN63GXPHvXJwRQFc3OJZmpR-S2BGpGIOGhJIMUrRxc_cUdJZOtuUL2E-Yklmu_zVW8mEuvjTr7bClTwr6nW95oNoumnbo9T7lT0IC5JbEPtADSdFz_VL76ORgyExI8yeyxWc4lDYhYO3Elf08yIRZSwwK3CEvTTfSjLueupSbkl6e4NsYWiZnvjUnudXRRKt0b3wkmDkSjzyF25-D3lpNFt79vdHid5xb1mQfcI1AMoJwMpF_FpEHaZ7o3QhQYnkzfAs-_uxsUoel48a9VzxhFU3zHQ', clusterName: 'cloudgen-cluster', contextName: 'arn:aws:eks:ap-south-1:879381242826:cluster/cloudgen-cluster', credentialsId: 'k8s-token', namespace: 'webapps', serverUrl: 'https://FE55C21E846BFF1B3531BCFA3079D0D9.gr7.ap-south-1.eks.amazonaws.com']]) {
+                    sh "kubectl apply -f deployment-service.yml --validate=false"
+                    sleep 20
+                }
+            }
+        }
+        stage('Verify Deployment') {
+            steps {
+               withKubeCredentials(kubectlCredentials: [[caCertificate: 'token:      eyJhbGciOiJSUzI1NiIsImtpZCI6Ii11SDR0X3hyb1NjTDItTUVWZTFhc1dMRUFVVzFYNjBHR1R0ck9xd0xmcmcifQ.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJ3ZWJhcHBzIiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9zZWNyZXQubmFtZSI6Im15c2VjcmV0bmFtZSIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50Lm5hbWUiOiJqZW5raW5zIiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9zZXJ2aWNlLWFjY291bnQudWlkIjoiMTY5MTc5MWUtYjcwOS00MGZiLTgzMDItMWQwZjdiMmMwODA5Iiwic3ViIjoic3lzdGVtOnNlcnZpY2VhY2NvdW50OndlYmFwcHM6amVua2lucyJ9.XLPBamNCNBqyxWcbaae4y5uDoTRIVuf--Sr10JRPnJzSwAQy6f_yzNxX2C6tN63GXPHvXJwRQFc3OJZmpR-S2BGpGIOGhJIMUrRxc_cUdJZOtuUL2E-Yklmu_zVW8mEuvjTr7bClTwr6nW95oNoumnbo9T7lT0IC5JbEPtADSdFz_VL76ORgyExI8yeyxWc4lDYhYO3Elf08yIRZSwwK3CEvTTfSjLueupSbkl6e4NsYWiZnvjUnudXRRKt0b3wkmDkSjzyF25-D3lpNFt79vdHid5xb1mQfcI1AMoJwMpF_FpEHaZ7o3QhQYnkzfAs-_uxsUoel48a9VzxhFU3zHQ', clusterName: 'cloudgen-cluster', contextName: 'arn:aws:eks:ap-south-1:879381242826:cluster/cloudgen-cluster', credentialsId: 'k8s-token', namespace: 'webapps', serverUrl: 'https://FE55C21E846BFF1B3531BCFA3079D0D9.gr7.ap-south-1.eks.amazonaws.com']]) {
+                    sh "kubectl get pods"
+                    sh "kubectl get service"
+                }
+            }
+        }
+        
+    }  // Closing stages
+}  // Closing pipeline
+post {
+    always {
+        script {
+            // Get job name, build number, and pipeline status
+            def jobName = env.JOB_NAME
+            def buildNumber = env.BUILD_NUMBER
+            def pipelineStatus = currentBuild.result ?: 'UNKNOWN'
+            pipelineStatus = pipelineStatus.toUpperCase()
+            
+            // Set the banner color based on the status
+            def bannerColor = pipelineStatus == 'SUCCESS' ? 'green' : 'red'
+
+            // HTML body for the email
+            def body = """
+            <body>
+                <div style="border: 2px solid ${bannerColor}; padding: 10px;">
+                    <h3 style="color: ${bannerColor};">
+                        Pipeline Status: ${pipelineStatus}
+                    </h3>
+                    <p>Job: ${jobName}</p>
+                    <p>Build Number: ${buildNumber}</p>
+                    <p>Status: ${pipelineStatus}</p>
+                </div>
+            </body>
+            """
+
+            // Send email notification
+            emailext(
+                subject: "${jobName} - Build ${buildNumber} - ${pipelineStatus}",
+                body: body,
+                to: 'ravindra.devops@gmail.com',
+                from: 'ravindra.devops@gmail.com',
+                replyTo: 'ravindra.devops@gmail.com',
+                mimeType: 'text/html'
+            )
+        }
+    }
+}
